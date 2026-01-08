@@ -1,14 +1,15 @@
-import pandas as pd
 import time
-import xmltodict
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 from typing import List
-from ia_agente import gerar_resumo_nf
+
+import pandas as pd
+import xmltodict
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 from gerar_relatorio_pdf import gerar_relatorio_pdf
+from ia_agente import gerar_resumo_nf
 
 
 def extrair_inf_nfe(data: dict) -> dict:
@@ -31,10 +32,7 @@ def extrair_inf_nfe(data: dict) -> dict:
 app = FastAPI(title="FiscalIA Pro")
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 # Servir arquivos estáticos da pasta assets
@@ -88,18 +86,19 @@ async def processar_nfes(files: List[UploadFile] = File(...)):
             total_geral += valor_nf
             total_icms += valor_icms
 
-            resultados.append({
-                "arquivo": file.filename,
-                "cnpj_emit": nfe["emit"]["CNPJ"],
-                "nome_emit": nfe["emit"]["xNome"],
-                "total_nf": valor_nf,
-                "icms": valor_icms,
-            })
+            resultados.append(
+                {
+                    "arquivo": file.filename,
+                    "cnpj_emit": nfe["emit"]["CNPJ"],
+                    "nome_emit": nfe["emit"]["xNome"],
+                    "total_nf": valor_nf,
+                    "icms": valor_icms,
+                }
+            )
         except Exception as e:
             print(f"ERRO NO ARQUIVO {file.filename}:", repr(e))
             raise HTTPException(
-                status_code=500,
-                detail=f"Erro ao processar XML {file.filename}: {e}"
+                status_code=500, detail=f"Erro ao processar XML {file.filename}: {e}"
             )
 
     df = pd.DataFrame(resultados)
@@ -152,11 +151,13 @@ async def download_relatorio(nome_arquivo: str):
             path=nome_arquivo,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             filename=nome_arquivo,
-            headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"}
+            headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"},
         )
     except Exception as e:
         print("ERRO AO ENVIAR EXCEL:", repr(e))
-        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {nome_arquivo}")
+        raise HTTPException(
+            status_code=404, detail=f"Arquivo não encontrado: {nome_arquivo}"
+        )
 
 
 @app.get("/resumo-ia")
@@ -206,9 +207,9 @@ async def home():
           }
           
           .logo img {
-            height: 80px;              /* normaliza o tamanho */
+            height: 80px;
             width: auto;
-            }
+          }
 
           .logo:hover {
             opacity: 0.8;
@@ -506,12 +507,42 @@ async def home():
             color: #c6ff00;
           }
 
-          .action-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 40px;
+          .action-buttons .btn,
+          .action-buttons .btn-download {
+              margin-top: 0 !important;
+              margin-bottom: 5px;
+              padding: 0 !important;
+              height: 64px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-sizing: border-box;
           }
+
+          .btn, 
+          .btn-download { 
+            height: 64px;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+          }
+
+          .btn-secondary {
+            border: 2px solid #c6ff00;
+            color: #c6ff00;
+            background: transparent;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+          }
+
+          .btn-secondary:hover {
+            background: #c6ff00;
+            color: #000;
+          }
+
 
           .btn-download {
             background: transparent;
@@ -606,7 +637,8 @@ async def home():
             .nav-info {
               display: none;
             }
-
+ 
+            
             .upload-area {
               padding: 60px 20px;
             }
@@ -669,6 +701,7 @@ async def home():
           <div id="resultado" class="hidden"></div>
           <div id="resumo-ia" class="hidden"></div>
         </div>
+
 
         <script>
         let selectedFiles = [];
@@ -768,37 +801,52 @@ async def home():
         }
 
         function mostrarResultado(data) {
-          const div = document.getElementById('resultado');
-          div.classList.remove('hidden');
-          
-          div.innerHTML = `
-            <div class="resultado-card">
-              <h2 class="resultado-title">Resultado</h2>
-              
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <div class="stat-label">Notas Processadas</div>
-                  <div class="stat-value">${data.qtd}</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-label">Total Geral</div>
-                  <div class="stat-value">R$ ${data.total_geral.toFixed(2)}</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-label">Total ICMS</div>
-                  <div class="stat-value">R$ ${data.total_icms.toFixed(2)}</div>
-                </div>
-              </div>
+  const div = document.getElementById('resultado');
+  div.classList.remove('hidden');
 
-              <div class="action-buttons">
-                <a href="/download-relatorio?nome_arquivo=${encodeURIComponent(data.relatorio_excel)}" class="btn-download">
-                  Baixar Excel
-                </a>
-                <button type="button" class="btn btn-secondary" onclick="gerarResumoIA('${data.relatorio_excel}')">
-                  Gerar Resumo IA
-                </button>
-              </div>
-            </div>
+  div.innerHTML = `
+    <div class="resultado-card">
+      <h2 class="resultado-title">Resultado</h2>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">Notas Processadas</div>
+          <div class="stat-value">${data.qtd}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Total Geral</div>
+          <div class="stat-value">R$ ${data.total_geral.toFixed(2)}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Total ICMS</div>
+          <div class="stat-value">R$ ${data.total_icms.toFixed(2)}</div>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <a 
+          href="/download-relatorio?nome_arquivo=${encodeURIComponent(data.relatorio_excel)}"
+          class="btn-download"
+        >
+          Baixar Excel
+        </a>
+
+        <a 
+          href="/gerar-relatorio-pdf?nome_arquivo=${encodeURIComponent(data.relatorio_excel)}"
+          class="btn-download"
+        >
+          Baixar PDF
+        </a>
+
+        <button 
+          type="button"
+          class="btn btn-secondary"
+          onclick="gerarResumoIA('${data.relatorio_excel}')"
+        >
+          Gerar Resumo IA
+        </button>
+      </div>
+    </div>
           `;
         }
 
@@ -832,6 +880,7 @@ async def home():
     </html>
     """
 
+
 @app.get("/gerar-relatorio-pdf")
 async def relatorio_pdf(nome_arquivo: str):
     nome_arquivo = nome_arquivo.strip()
@@ -843,7 +892,7 @@ async def relatorio_pdf(nome_arquivo: str):
     )
 
 
-
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
