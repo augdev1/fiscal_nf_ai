@@ -134,11 +134,13 @@ async def processar_nfes(files: List[UploadFile] = File(...)):
             cell.font = bold_font
 
     return {
-        "qtd": len(resultados),
-        "total_geral": total_geral,
-        "total_icms": total_icms,
-        "relatorio_excel": nome_arquivo,
-        "notas": resultados,
+    "qtd": len(resultados),
+    "total_geral": total_geral,
+    "total_geral_formatado": f"R$ {total_geral:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+    "total_icms": total_icms,
+    "total_icms_formatado": f"R$ {total_icms:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+    "relatorio_excel": nome_arquivo,
+    "notas": resultados,
     }
 
 

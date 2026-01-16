@@ -31,20 +31,23 @@ def gerar_resumo_nf(df: pd.DataFrame) -> str:
     contexto = resumo_por_emit.to_string(index=False)
 
     prompt = f"""
-    Você recebeu uma tabela com colunas: nome_emit, total_nf, icms.
+Você recebeu uma tabela com colunas: nome_emit, total_nf, icms.
 
-    Cada linha representa o total de notas fiscais para um emissor, no período analisado.
+Cada linha representa o total de notas fiscais para um emissor, no período analisado.
+Os valores de total_nf e icms já estão em reais (R$), NÃO em milhares ou milhões.
+Nunca some, multiplique ou converta esses valores para "mil", "milhão" ou unidades diferentes.
+Use sempre os valores exatamente como aparecem nos dados.
 
-    DADOS:
-    {contexto}
+DADOS:
+{contexto}
 
-    Gere um resumo curto, em português, abordando:
-    - Faturamento total aproximado.
-    - Quem são os principais emissores (maiores valores).
-    - Comentário rápido sobre o ICMS (valores mais altos / concentração).
+Gere um resumo curto, em português, abordando:
+- Faturamento total aproximado (em reais), usando números no formato R$ X.XXX,XX.
+- Quem são os principais emissores (maiores valores de total_nf).
+- Comentário rápido sobre o ICMS (valores mais altos / concentração), também em reais.
 
-    Não devolva tabela nem código, apenas um texto corrido em 1 a 3 parágrafos.
-    """
+Não devolva tabela nem código, apenas um texto corrido em 1 a 3 parágrafos.
+"""
 
     chat_completion = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",  # modelo da Groq [web:502][web:504]
