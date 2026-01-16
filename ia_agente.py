@@ -30,7 +30,7 @@ def gerar_resumo_nf(df: pd.DataFrame) -> str:
 
     contexto = resumo_por_emit.to_string(index=False)
     
-    # Construindo o prompt para o modelo
+    # Construindo o prompt para o modelo / agente
     prompt = f"""
 Você recebeu uma tabela com colunas: nome_emit, total_nf, icms.
 
