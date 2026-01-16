@@ -133,7 +133,7 @@ async def processar_nfes(files: List[UploadFile] = File(...)):
             cell = worksheet.cell(row=last_row, column=col)
             cell.font = bold_font
 
-    #excel com fotmatação básica gerado
+    #excel com formatação básica gerado
     return {
     "qtd": len(resultados),
     "total_geral": total_geral,
