@@ -1,982 +1,361 @@
-import pandas as pd
-import time
-import xmltodict
-import sqlite3
-from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from typing import List
+# -*- coding: utf-8 -*-
 
-# Funções do projeto
-from ia_agente import gerar_resumo_nf
+# 1. Imports de bibliotecas padrão
+import os
+import sqlite3
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+# 2. Imports de bibliotecas de terceiros
+import pandas as pd
+import uvicorn
+import xmltodict
+from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+# 3. Imports de módulos locais
+from db_repository import inserir_atualizar_empresa, inserir_nota_completa
+from db_setup import init_db
 from gerar_relatorio_pdf import gerar_relatorio_pdf
-from db_repository import (
-    inserir_atualizar_empresa, 
-    inserir_nota_completa, 
-    registrar_log
+from ia_agente import gerar_resumo_nf
+
+# --- Configuração e Constantes ---
+
+BASE_DIR = Path(__file__).parent
+ASSETS_DIR = BASE_DIR / "assets"
+RELATORIOS_DIR = BASE_DIR / "relatorios"
+
+# Garante que os diretórios essenciais existam na inicialização
+RELATORIOS_DIR.mkdir(exist_ok=True)
+ASSETS_DIR.mkdir(exist_ok=True)
+
+
+def gerar_nome_relatorio() -> str:
+    """Gera nome único para o relatório com timestamp legível."""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    return f"relatorio_nfes_{timestamp}.xlsx"
+
+
+def limpar_relatorios_antigos(dias_para_manter: int = 7) -> None:
+    """Remove relatórios .xlsx mais antigos que N dias na pasta de relatórios."""
+    if not RELATORIOS_DIR.exists():
+        return
+
+    agora = time.time()
+    limite_segundos = dias_para_manter * 24 * 60 * 60
+
+    for arquivo in RELATORIOS_DIR.glob("relatorio_nfes_*.xlsx"):
+        try:
+            mtime = arquivo.stat().st_mtime
+            if (agora - mtime) > limite_segundos:
+                arquivo.unlink()
+        except OSError:
+            # Se não conseguir apagar, apenas ignora para não quebrar o startup
+            pass
+
+
+app = FastAPI(
+    title="FiscalIA Pro",
+    description="API para processamento e análise inteligente de NF-e.",
+    version="1.1.0",
 )
 
+# --- Funções Auxiliares de Lógica ---
 
-def extrair_inf_nfe(data: dict) -> dict:
+
+def _extrair_inf_nfe(data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Aceita tanto:
-    - nfeProc -> NFe -> infNFe
-    - NFe -> infNFe
-    Retorna sempre o dict de infNFe.
+    Extrai o dicionário 'infNFe' de forma robusta, testando os caminhos mais comuns em XMLs de NF-e.
     """
-    if "nfeProc" in data:
-        return data["nfeProc"]["NFe"]["infNFe"]
-    if "NFe" in data:
-        return data["NFe"]["infNFe"]
-    for k in data.keys():
-        if k.endswith("NFe"):
-            return data[k]["infNFe"]
-    raise KeyError("Estrutura de NF-e não reconhecida")
+    try:
+        # Caminho 1: data -> nfeProc -> NFe -> infNFe (o mais comum)
+        infNFe = data.get("nfeProc", {}).get("NFe", {}).get("infNFe")
+        if infNFe:
+            return infNFe, None
+
+        # Caminho 2: data -> NFe -> infNFe (quando não há o grupo 'nfeProc')
+        infNFe = data.get("NFe", {}).get("infNFe")
+        if infNFe:
+            return infNFe, None
+
+        # Caminho 3: data -> infNFe (estrutura mais simples, incomum)
+        infNFe = data.get("infNFe")
+        if infNFe:
+            return infNFe, None
+
+        return None, "A tag 'infNFe' não foi encontrada nos locais esperados dentro do XML."
+    except (AttributeError, TypeError) as e:
+        return None, f"Erro inesperado ao processar a estrutura do XML: {repr(e)}"
 
 
-app = FastAPI(title="FiscalIA Pro")
+async def _processa_arquivo_nfe(file: UploadFile) -> Tuple[Optional[Dict], Optional[Dict]]:
+    """
+    Processa um único arquivo de NF-e, desde a leitura até a persistência no banco.
+    Retorna uma tupla com (dados_sucesso, dados_erro).
+    """
+    try:
+        # 1. Leitura e Decodificação do XML
+        content_bytes = await file.read()
+        try:
+            content_str = content_bytes.decode('utf-8')
+        except UnicodeDecodeError:
+            content_str = content_bytes.decode('latin-1')
+
+        data = xmltodict.parse(content_str)
+
+        nfe, erro = _extrair_inf_nfe(data)
+        if erro:
+            raise ValueError(erro)
+
+        # 2. Extração Segura dos Dados
+        emitente = nfe.get("emit")
+        ide = nfe.get("ide")
+        total = nfe.get("total", {}).get("ICMSTot")
+        chave_acesso = nfe.get("@Id", "").replace("NFe", "")
+
+        if not all([emitente, ide, total, chave_acesso]):
+            raise KeyError("XML não contém tags essenciais como 'emit', 'ide', 'total' ou '@Id'.")
+
+        data_emissao_raw = ide.get("dhEmi") or ide.get("dEmi")
+        if not data_emissao_raw:
+            raise ValueError("Data de emissão ('dhEmi' ou 'dEmi') não encontrada.")
+
+        # 3. Persistência no Banco de Dados
+        empresa_id = inserir_atualizar_empresa(
+            nome=emitente.get("xNome"),
+            cnpj=emitente.get("CNPJ"),
+        )
+
+        detalhes_itens = nfe.get("det", [])
+        if not isinstance(detalhes_itens, list):
+            detalhes_itens = [detalhes_itens]
+
+        nota_data = {
+            "empresa_id": empresa_id,
+            "numero": int(ide["nNF"]),
+            "serie": int(ide["serie"]),
+            "chave_acesso": chave_acesso,
+            "data_emissao": data_emissao_raw[:10],
+            "valor_total": float(total["vNF"]),
+            "cfop_principal": detalhes_itens[0].get("prod", {}).get("CFOP") if detalhes_itens else None,
+            "destinatario_nome": nfe.get("dest", {}).get("xNome"),
+            "destinatario_cnpj": nfe.get("dest", {}).get("CNPJ"),
+        }
+
+        itens_data = [
+            {
+                "codigo_produto": item.get("prod", {}).get("cProd"),
+                "descricao": item.get("prod", {}).get("xProd"),
+                "quantidade": float(item.get("prod", {}).get("qCom", 0)),
+                "valor_unitario": float(item.get("prod", {}).get("vUnCom", 0)),
+                "valor_total": float(item.get("prod", {}).get("vProd", 0)),
+                "cfop": item.get("prod", {}).get("CFOP"),
+                "ncm": item.get("prod", {}).get("NCM"),
+            }
+            for item in detalhes_itens
+        ]
+
+        inserir_nota_completa(nota_data, itens_data)
+
+        # 4. Dados para o relatório de sucesso
+        dados_sucesso = {
+            "arquivo": file.filename,
+            "cnpj_emit": emitente.get("CNPJ"),
+            "nome_emit": emitente.get("xNome"),
+            "total_nf": float(total["vNF"]),
+            "icms": float(total.get("vICMS", 0.0)),
+        }
+        return dados_sucesso, None
+
+    except sqlite3.IntegrityError:
+        return None, {"arquivo": file.filename, "erro": "Nota fiscal já cadastrada (chave duplicada)."}
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        return None, {"arquivo": file.filename, "erro": f"Dados inválidos ou faltando: {e}"}
+    except Exception as e:
+        return None, {"arquivo": file.filename, "erro": f"Erro inesperado: {repr(e)}"}
+
+
+def _gera_relatorio_excel(notas: List[Dict], totais: Dict) -> str:
+    """Gera um relatório em Excel a partir dos dados processados e o salva em disco."""
+    df = pd.DataFrame(notas)
+    df = df.sort_values(by=["nome_emit", "total_nf"], ascending=[True, False])
+
+    # Adiciona linha de total ao DataFrame
+    df_total = pd.DataFrame(
+        [
+            {
+                "arquivo": "TOTAL",
+                "total_nf": totais["geral"],
+                "icms": totais["icms"],
+            }
+        ]
+    )
+    df = pd.concat([df, df_total], ignore_index=True)
+
+    nome_arquivo = gerar_nome_relatorio()
+    caminho_excel = RELATORIOS_DIR / nome_arquivo
+
+    df.to_excel(
+        caminho_excel,
+        index=False,
+        sheet_name="RelatorioNFes",
+        engine="openpyxl",
+    )
+
+    return nome_arquivo
+
+
+# --- Eventos da Aplicação ---
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Inicializa o banco de dados ao iniciar a aplicação."""
+    print("Executando inicialização do banco de dados...")
+    init_db()
+    limpar_relatorios_antigos(dias_para_manter=7)
+    print("Inicialização do banco de dados concluída.")
+
+
+# --- Middlewares e Rotas Estáticas ---
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
+app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
-# Servir arquivos estáticos da pasta assets
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+
+# --- Endpoints da API ---
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def home():
+    """Serve a página principal da aplicação."""
+    index_path = ASSETS_DIR / "index.html"
+    if not index_path.is_file():
+        return "<h1>FiscalIA Pro</h1><p>Arquivo index.html não encontrado.</p>", 404
+    return index_path.read_text(encoding="utf-8")
 
 
 @app.get("/health")
 async def health():
+    """Endpoint de verificação de saúde da API."""
     return {"status": "🚀 FiscalIA Pro rodando!", "ok": True}
 
 
-@app.post("/processar-xml")
-async def processar_xml(file: UploadFile = File(...)):
-    """Upload 1 XML → extrai CNPJ/total"""
-    try:
-        content = await file.read()
-        data = xmltodict.parse(content)
-        print("RAIZ KEYS:", list(data.keys()))
-        nfe = extrair_inf_nfe(data)
-
-        return {
-            "cnpj_emit": nfe["emit"]["CNPJ"],
-            "nome_emit": nfe["emit"]["xNome"],
-            "total_nf": float(nfe["total"]["ICMSTot"]["vNF"]),
-            "icms": float(nfe["total"]["ICMSTot"]["vICMS"]),
-        }
-    except Exception as e:
-        print("ERRO AO PROCESSAR XML:", repr(e))
-        raise HTTPException(status_code=500, detail=f"Erro ao processar XML: {e}")
-
-
-@app.post("/processar-nfes")
+@app.post("/processar-nfes", summary="Processa um lote de arquivos XML de NF-e")
 async def processar_nfes(files: List[UploadFile] = File(...)):
     """
-    Recebe vários XMLs, extrai dados, salva no banco de dados,
-    soma totais e gera um relatório Excel.
+    Recebe um lote de arquivos XML de NF-e, processa cada um individualmente,
+    salva os dados no banco e, ao final, gera um relatório consolidado em Excel.
     """
-    resultados = []
+    notas_sucesso: List[Dict[str, Any]] = []
+    erros_processamento: List[Dict[str, Any]] = []
     total_geral = 0.0
     total_icms = 0.0
-    notas_processadas_com_sucesso = 0
-    erros_processamento = []
-    
-    # Guarda o momento de início para usar em ambos os logs
-    inicio_processo = datetime.now()
-
-    # Inicia o log do processo de lote
-    log_id = registrar_log(
-        tipo_processo="processamento_nfe_lote",
-        status="iniciado",
-        iniciado_em=inicio_processo
-    )
 
     for file in files:
-        try:
-            content = await file.read()
-            data = xmltodict.parse(content)
-            nfe = extrair_inf_nfe(data)
+        sucesso, erro = await _processa_arquivo_nfe(file)
+        if sucesso:
+            notas_sucesso.append(sucesso)
+            total_geral += sucesso["total_nf"]
+            total_icms += sucesso["icms"]
+        if erro:
+            erros_processamento.append(erro)
 
-            # --- Persistência no Banco de Dados ---
-            
-            # 1. Salvar a empresa
-            emitente = nfe["emit"]
-            empresa_id = inserir_atualizar_empresa(nome=emitente["xNome"], cnpj=emitente["CNPJ"])
+    if not notas_sucesso:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": "Nenhuma nota fiscal pôde ser processada com sucesso.",
+                "erros": erros_processamento,
+            },
+        )
 
-            # 2. Preparar dados da nota
-            ide = nfe["ide"]
-            total = nfe["total"]["ICMSTot"]
-            
-            # A chave de acesso pode ter o prefixo "NFe", removemos ele
-            chave_acesso = nfe["@Id"].replace("NFe", "")
-            
-            # A data de emissão pode ser um datetime, pegamos apenas a parte da data
-            data_emissao = ide["dhEmi"][:10]
-
-            nota_data = {
-                "empresa_id": empresa_id,
-                "numero": int(ide["nNF"]),
-                "serie": int(ide["serie"]),
-                "chave_acesso": chave_acesso,
-                "data_emissao": data_emissao,
-                "valor_total": float(total["vNF"]),
-                "cfop_principal": nfe["det"][0]["prod"]["CFOP"] if isinstance(nfe["det"], list) else nfe["det"]["prod"]["CFOP"],
-                "destinatario_nome": nfe.get("dest", {}).get("xNome"),
-                "destinatario_cnpj": nfe.get("dest", {}).get("CNPJ")
-            }
-
-            # 3. Preparar dados dos itens
-            # Garante que 'det' seja sempre uma lista
-            detalhes_itens = nfe["det"]
-            if not isinstance(detalhes_itens, list):
-                detalhes_itens = [detalhes_itens]
-
-            itens_data = []
-            for item in detalhes_itens:
-                prod = item["prod"]
-                itens_data.append({
-                    "codigo_produto": prod["cProd"],
-                    "descricao": prod["xProd"],
-                    "quantidade": float(prod["qCom"]),
-                    "valor_unitario": float(prod["vUnCom"]),
-                    "valor_total": float(prod["vProd"]),
-                    "cfop": prod["CFOP"],
-                    "ncm": prod.get("NCM")
-                })
-            
-            # 4. Inserir nota e itens de forma transacional
-            inserir_nota_completa(nota_data, itens_data)
-            
-            # --- Fim da Persistência ---
-
-            # Mantém a lógica original para o relatório
-            valor_nf = float(total["vNF"])
-            valor_icms = float(total.get("vICMS", 0.0))
-
-            total_geral += valor_nf
-            total_icms += valor_icms
-            
-            resultados.append({
-                "arquivo": file.filename,
-                "cnpj_emit": emitente["CNPJ"],
-                "nome_emit": emitente["xNome"],
-                "total_nf": valor_nf,
-                "icms": valor_icms,
-            })
-            notas_processadas_com_sucesso += 1
-
-        except sqlite3.IntegrityError as e:
-            # Erro comum se a chave de acesso já existir
-            erro_msg = f"Nota já existe no banco de dados (chave duplicada)."
-            print(f"AVISO NO ARQUIVO {file.filename}: {erro_msg}")
-            erros_processamento.append(f"{file.filename}: {erro_msg}")
-        except Exception as e:
-            # Captura outros erros durante o processamento do arquivo
-            erro_msg = f"Erro inesperado: {repr(e)}"
-            print(f"ERRO NO ARQUIVO {file.filename}: {erro_msg}")
-            erros_processamento.append(f"{file.filename}: {erro_msg}")
-            # Decide se um erro em um arquivo deve parar todo o lote.
-            # Aqui, vamos apenas registrar e continuar.
-    
-    # Atualiza o log do processo de lote com o resultado final
-    status_final = "sucesso_parcial" if erros_processamento else "sucesso"
-    mensagem_log = f"{notas_processadas_com_sucesso} de {len(files)} notas processadas e salvas."
-    
-    registrar_log(
-        tipo_processo="processamento_nfe_lote_finalizado",
-        status=status_final,
-        mensagem=mensagem_log,
-        detalhes_erro=" | ".join(erros_processamento) if erros_processamento else None,
-        iniciado_em=inicio_processo,  # Adicionado para corrigir o erro
-        finalizado_em=datetime.now()
+    nome_relatorio = _gera_relatorio_excel(
+        notas=notas_sucesso,
+        totais={"geral": total_geral, "icms": total_icms},
     )
 
-    # Se nenhum resultado foi gerado, retorna um erro
-    if not resultados:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Nenhuma nota pôde ser processada. Erros: {' | '.join(erros_processamento)}"
-        )
-
-    # Geração do DataFrame e do arquivo Excel (lógica original)
-    df = pd.DataFrame(resultados)
-    df = df.sort_values(by=["nome_emit", "total_nf"], ascending=[True, False])
-
-    linha_total = {
-        "arquivo": "TOTAL",
-        "cnpj_emit": "",
-        "nome_emit": "",
-        "total_nf": total_geral,
-        "icms": total_icms,
-    }
-
-    df = pd.concat([df, pd.DataFrame([linha_total])], ignore_index=True)
-    nome_arquivo = f"relatorio_nfes_{int(time.time())}.xlsx"
-
-    with pd.ExcelWriter(nome_arquivo, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Relatorio")
-        # (O restante da formatação do Excel é omitido para brevidade, mas funcionaria aqui)
-
     return {
-        "qtd": len(resultados),
+        "mensagem": f"Processamento concluído. {len(notas_sucesso)} de {len(files)} notas processadas com sucesso.",
+        "notas_processadas": len(notas_sucesso),
+        "erros": len(erros_processamento),
         "total_geral": total_geral,
         "total_icms": total_icms,
-        "relatorio_excel": nome_arquivo,
-        "notas": resultados,
-        "erros": erros_processamento
+        "relatorio_excel": nome_relatorio,
+        "detalhes_erros": erros_processamento,
     }
 
 
-@app.get("/download-relatorio")
+@app.get("/download-relatorio", summary="Download de relatório Excel")
 async def download_relatorio(nome_arquivo: str):
-    """
-    Faz o download do arquivo Excel gerado.
-    """
-    try:
-        return FileResponse(
-            path=nome_arquivo,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=nome_arquivo,
-            headers={"Content-Disposition": f"attachment; filename={nome_arquivo}"}
+    """Faz o download de um relatório Excel gerado anteriormente."""
+    caminho_arquivo = RELATORIOS_DIR / nome_arquivo
+    if not caminho_arquivo.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Arquivo não encontrado: {nome_arquivo}",
         )
-    except Exception as e:
-        print("ERRO AO ENVIAR EXCEL:", repr(e))
-        raise HTTPException(status_code=404, detail=f"Arquivo não encontrado: {nome_arquivo}")
+
+    return FileResponse(
+        path=caminho_arquivo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=nome_arquivo,
+    )
 
 
-@app.get("/resumo-ia")
+@app.get("/resumo-ia", summary="Gera resumo analítico com IA")
 async def resumo_ia(nome_arquivo: str):
-    df = pd.read_excel(nome_arquivo)
+    """Lê um relatório Excel e gera um resumo analítico usando IA."""
+    caminho_arquivo = RELATORIOS_DIR / nome_arquivo
+    if not caminho_arquivo.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Arquivo de relatório não encontrado: {nome_arquivo}",
+        )
+
+    df = pd.read_excel(caminho_arquivo)
     texto = gerar_resumo_nf(df)
     return {"resumo": texto}
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home():
-    return """
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="icon" type="image/x-icon" href="/assets/logoai.ico">
-        <title>FiscalIA Pro</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
+@app.get("/gerar-relatorio-pdf", summary="Gera e baixa relatório em PDF")
+async def gerar_e_baixar_pdf(nome_arquivo: str):
+    """Converte um relatório Excel existente para PDF e o retorna para download."""
+    caminho_excel = RELATORIOS_DIR / nome_arquivo
+    if not caminho_excel.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Arquivo Excel base não encontrado: {nome_arquivo}",
+        )
+
+    nome_pdf = caminho_excel.with_suffix(".pdf").name
+    caminho_pdf = RELATORIOS_DIR / nome_pdf
+
+    try:
+        gerar_relatorio_pdf(str(caminho_excel), str(caminho_pdf))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao gerar o relatório PDF: {e}",
+        )
 
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #000;
-            color: #fff;
-            overflow-x: hidden;
-          }
-
-          nav {
-            position: fixed;
-            top: 0;
-            height: 80px;
-            width: 100%;
-            padding: 20px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(0,0,0,0.9);
-            backdrop-filter: blur(10px);
-            z-index: 1000;
-            border-bottom: 1px solid rgba(198,255,0,0.2);
-          }
-          
-          .logo img {
-            height: 80px;              /* normaliza o tamanho */
-            width: auto;
-            }
-
-          .logo:hover {
-            opacity: 0.8;
-          }
-
-          .nav-info {
-            font-size: 14px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-
-          .hero {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 100px 40px 60px;
-            background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
-            position: relative;
-            overflow: hidden;
-          }
-
-          .hero-bg {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(circle at 20% 50%, rgba(198,255,0,0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(198,255,0,0.05) 0%, transparent 50%);
-          }
-
-          .hero-content {
-            position: relative;
-            z-index: 1;
-            text-align: center;
-            max-width: 1200px;
-            width: 100%;
-          }
-
-          .hero h1 {
-            font-size: 80px;
-            font-weight: 900;
-            margin-bottom: 10px;
-            background: linear-gradient(90deg, #fff 0%, #c6ff00 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: fadeInUp 1s ease;
-          }
-
-          .hero .subtitle {
-            font-size: 18px;
-            color: #888;
-            margin-bottom: 60px;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            animation: fadeInUp 1.2s ease;
-          }
-
-          .upload-container {
-            width: 100%;
-            max-width: 900px;
-            margin: 40px auto;
-            animation: fadeInUp 1.4s ease;
-          }
-
-          .upload-area {
-            border: 3px solid rgba(198,255,0,0.3);
-            padding: 80px 40px;
-            text-align: center;
-            background: rgba(198,255,0,0.02);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-          }
-
-          .upload-area:hover {
-            border-color: #c6ff00;
-            background: rgba(198,255,0,0.05);
-          }
-
-          .upload-area.dragover {
-            border-color: #c6ff00;
-            background: rgba(198,255,0,0.1);
-            transform: scale(1.01);
-          }
-
-          .upload-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            filter: grayscale(100%);
-            opacity: 0.6;
-            transition: all 0.3s;
-          }
-
-          .upload-area:hover .upload-icon {
-            filter: grayscale(0%);
-            opacity: 1;
-          }
-
-          .upload-text {
-            font-size: 24px;
-            color: #fff;
-            margin-bottom: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-
-          .upload-subtext {
-            font-size: 14px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-
-          input[type="file"] {
-            display: none;
-          }
-
-          .file-list {
-            margin-top: 30px;
-            padding: 0;
-          }
-
-          .file-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px;
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(198,255,0,0.2);
-            margin-bottom: 10px;
-            transition: all 0.3s;
-          }
-
-          .file-item:hover {
-            background: rgba(198,255,0,0.05);
-            border-color: #c6ff00;
-          }
-
-          .file-name {
-            color: #fff;
-            font-size: 14px;
-            flex: 1;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-
-          .file-size {
-            color: #888;
-            font-size: 12px;
-            margin-right: 20px;
-            text-transform: uppercase;
-          }
-
-          .remove-file {
-            background: transparent;
-            color: #c6ff00;
-            border: 1px solid #c6ff00;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s;
-          }
-
-          .remove-file:hover {
-            background: #c6ff00;
-            color: #000;
-          }
-
-          .btn {
-            width: 100%;
-            padding: 24px;
-            font-size: 16px;
-            font-weight: 700;
-            border: 2px solid #c6ff00;
-            background: transparent;
-            color: #c6ff00;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 30px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-
-          .btn:hover:not(:disabled) {
-            background: #c6ff00;
-            color: #000;
-            transform: translateY(-2px);
-          }
-
-          .btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-            border-color: #444;
-            color: #444;
-          }
-
-          .btn-secondary {
-            background: transparent;
-            border: 2px solid #fff;
-            color: #fff;
-          }
-
-          .btn-secondary:hover {
-            background: #fff;
-            color: #000;
-          }
-
-          .loading {
-            display: none;
-            text-align: center;
-            padding: 60px 20px;
-          }
-
-          .loading.active {
-            display: block;
-          }
-
-          .spinner {
-            border: 3px solid rgba(198,255,0,0.1);
-            border-top: 3px solid #c6ff00;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-          }
-
-          .loading-text {
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 14px;
-          }
-
-          .resultado-section {
-            max-width: 1200px;
-            margin: 60px auto;
-            padding: 0 40px;
-          }
-
-          .resultado-card {
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(198,255,0,0.2);
-            padding: 60px 40px;
-            animation: slideIn 0.5s ease;
-          }
-
-          .resultado-title {
-            font-size: 36px;
-            font-weight: 900;
-            color: #c6ff00;
-            margin-bottom: 40px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-
-          .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 30px;
-            margin-bottom: 40px;
-          }
-
-          .stat-item {
-            text-align: center;
-            padding: 40px 20px;
-            background: rgba(198,255,0,0.02);
-            border: 1px solid rgba(198,255,0,0.2);
-            transition: all 0.3s;
-          }
-
-          .stat-item:hover {
-            background: rgba(198,255,0,0.05);
-            border-color: #c6ff00;
-            transform: translateY(-5px);
-          }
-
-          .stat-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #888;
-            margin-bottom: 15px;
-            letter-spacing: 2px;
-          }
-
-          .stat-value {
-            font-size: 42px;
-            font-weight: 900;
-            color: #c6ff00;
-          }
-
-          .action-buttons .btn,
-          .action-buttons .btn-download {
-            margin-top: 0 !important;
-            margin-bottom: 5px;
-            padding: 0 !important;
-            height: 64px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-sizing: border-box;
-          }
-
-
-
-          .btn,
-          .btn-download {
-          height: 64px;
-          padding: 0 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-sizing: border-box;
-        }
-
-        .btn-secondary {
-          border: 2px solid #fff;
-          color: #fff;
-          background: transparent;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-        }
-
-        .btn-download {
-          background: transparent;
-          border: 2px solid #c6ff00;
-          color: #c6ff00;
-          padding: 20px;
-          text-decoration: none;
-          display: block;
-          text-align: center;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 2px;
-          transition: all 0.3s;
-        }
-
-        .btn-download:hover {
-          background: #c6ff00;
-          color: #000;
-          transform: translateY(-2px);
-        }
-
-        .resumo-ia-card {
-          margin-top: 60px;
-          padding: 60px 40px;
-          background: rgba(255,255,255,0.02);
-          border: 1px solid rgba(198,255,0,0.2);
-          animation: slideIn 0.5s ease;
-        }
-
-          .resumo-ia-card h3 {
-            color: #c6ff00;
-            margin-bottom: 30px;
-            font-size: 36px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-
-          .resumo-ia-card pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            line-height: 1.8;
-            color: #aaa;
-            font-family: inherit;
-            font-size: 16px;
-          }
-
-          .hidden {
-            display: none;
-          }
-
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-
-          @keyframes fadeInUp {
-            from {
-              opacity: 0;
-              transform: translateY(30px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          @keyframes slideIn {
-            from {
-              opacity: 0;
-              transform: translateX(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-
-          @media (max-width: 768px) {
-            .hero h1 {
-              font-size: 48px;
-            }
-
-            nav {
-              padding: 15px 20px;
-            }
-
-            .logo {
-              font-size: 20px;
-            }
-
-            .nav-info {
-              display: none;
-            }
-
-            .upload-area {
-              padding: 60px 20px;
-            }
-
-            .stats-grid {
-              grid-template-columns: 1fr;
-              gap: 15px;
-            }
-
-            .action-buttons {
-              grid-template-columns: 1fr;
-            }
-
-            .resultado-card,
-            .resumo-ia-card {
-              padding: 40px 20px;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <nav>
-            <a href="/" class="logo">
-            <img src="/assets/logoai.png" alt="Fiscal IA Pro">
-            </a>
-          <div class="nav-info">Análise Inteligente</div>
-        </nav>
-
-        <section class="hero">
-          <div class="hero-bg"></div>
-          <div class="hero-content">
-            <h1>FISCAL IA PRO</h1>
-            <div class="subtitle">Relatório de NF-e com IA</div>
-
-            <div class="upload-container">
-              <form id="form-nfes" enctype="multipart/form-data">
-                <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
-                  <div class="upload-icon">📁</div>
-                  <div class="upload-text">Carregar Arquivos XML</div>
-                  <div class="upload-subtext">Arraste ou clique para selecionar</div>
-                  <input id="file-input" name="files" type="file" multiple accept=".xml" />
-                </div>
-
-                <div id="file-list" class="file-list hidden"></div>
-
-                <button type="button" class="btn" id="btn-processar" onclick="enviar()" disabled>
-                  Gerar Relatório
-                </button>
-              </form>
-            </div>
-
-            <div class="loading" id="loading">
-              <div class="spinner"></div>
-              <div class="loading-text">Processando...</div>
-            </div>
-          </div>
-        </section>
-
-        <div class="resultado-section">
-          <div id="resultado" class="hidden"></div>
-          <div id="resumo-ia" class="hidden"></div>
-        </div>
-
-        <script>
-        let selectedFiles = [];
-
-        const uploadArea = document.getElementById('upload-area');
-        const fileInput = document.getElementById('file-input');
-        const fileList = document.getElementById('file-list');
-        const btnProcessar = document.getElementById('btn-processar');
-
-        uploadArea.addEventListener('dragover', (e) => {
-          e.preventDefault();
-          uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-          uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-          e.preventDefault();
-          uploadArea.classList.remove('dragover');
-          const files = Array.from(e.dataTransfer.files);
-          handleFiles(files);
-        });
-
-        fileInput.addEventListener('change', (e) => {
-          const files = Array.from(e.target.files);
-          handleFiles(files);
-        });
-
-        function handleFiles(files) {
-          selectedFiles = files.filter(f => f.name.endsWith('.xml'));
-          
-          if (selectedFiles.length === 0) {
-            alert('Por favor, selecione apenas arquivos XML.');
-            return;
-          }
-
-          renderFileList();
-          btnProcessar.disabled = false;
-        }
-
-        function renderFileList() {
-          if (selectedFiles.length === 0) {
-            fileList.classList.add('hidden');
-            btnProcessar.disabled = true;
-            return;
-          }
-
-          fileList.classList.remove('hidden');
-          fileList.innerHTML = selectedFiles.map((file, index) => `
-            <div class="file-item">
-              <span class="file-name">📄 ${file.name}</span>
-              <span class="file-size">${(file.size / 1024).toFixed(1)} KB</span>
-              <button type="button" class="remove-file" onclick="removeFile(${index})">Remover</button>
-            </div>
-          `).join('');
-        }
-
-        function removeFile(index) {
-          selectedFiles.splice(index, 1);
-          renderFileList();
-        }
-
-        async function enviar() {
-          const form = document.getElementById('form-nfes');
-          const formData = new FormData();
-          
-          selectedFiles.forEach(file => {
-            formData.append('files', file);
-          });
-
-          document.getElementById('loading').classList.add('active');
-          document.getElementById('resultado').classList.add('hidden');
-          document.getElementById('resumo-ia').classList.add('hidden');
-          btnProcessar.disabled = true;
-
-          try {
-            const resp = await fetch('/processar-nfes', {
-              method: 'POST',
-              body: formData
-            });
-
-            const data = await resp.json();
-
-            if (resp.ok) {
-              mostrarResultado(data);
-            } else {
-              alert('Erro: ' + (data.detail || 'erro ao processar'));
-            }
-          } catch (error) {
-            alert('Erro de conexão: ' + error.message);
-          } finally {
-            document.getElementById('loading').classList.remove('active');
-            btnProcessar.disabled = false;
-          }
-        }
-
-        function mostrarResultado(data) {
-  const div = document.getElementById('resultado');
-  div.classList.remove('hidden');
-
-  div.innerHTML = `
-    <div class="resultado-card">
-      <h2 class="resultado-title">Resultado</h2>
-
-      <div class="stats-grid">
-        <div class="stat-item">
-          <div class="stat-label">Notas Processadas</div>
-          <div class="stat-value">${data.qtd}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Total Geral</div>
-          <div class="stat-value">R$ ${data.total_geral.toFixed(2)}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Total ICMS</div>
-          <div class="stat-value">R$ ${data.total_icms.toFixed(2)}</div>
-        </div>
-      </div>
-
-      <div class="action-buttons">
-        <a 
-          href="/download-relatorio?nome_arquivo=${encodeURIComponent(data.relatorio_excel)}"
-          class="btn-download"
-        >
-          Baixar Excel
-        </a>
-
-        <a 
-          href="/gerar-relatorio-pdf?nome_arquivo=${encodeURIComponent(data.relatorio_excel)}"
-          class="btn-download"
-        >
-          Baixar PDF
-        </a>
-
-        <button 
-          type="button"
-          class="btn"
-          onclick="gerarResumoIA('${data.relatorio_excel}')"
-        >
-          Gerar Resumo IA
-        </button>
-
-      </div>
-    </div>
-          `;
-        }
-
-        async function gerarResumoIA(nomeArquivo) {
-          document.getElementById('loading').classList.add('active');
-          
-          try {
-            const resp = await fetch('/resumo-ia?nome_arquivo=' + encodeURIComponent(nomeArquivo));
-            const data = await resp.json();
-
-            if (resp.ok) {
-              const resumoDiv = document.getElementById('resumo-ia');
-              resumoDiv.classList.remove('hidden');
-              resumoDiv.innerHTML = `
-                <div class="resumo-ia-card">
-                  <h3>Análise IA</h3>
-                  <pre>${data.resumo}</pre>
-                </div>
-              `;
-            } else {
-              alert('Erro IA: ' + (data.detail || 'erro ao gerar resumo'));
-            }
-          } catch (error) {
-            alert('Erro ao gerar resumo: ' + error.message);
-          } finally {
-            document.getElementById('loading').classList.remove('active');
-          }
-        }
-        </script>
-      </body>
-    </html>
-    """
-
-@app.get("/gerar-relatorio-pdf")
-async def relatorio_pdf(nome_arquivo: str):
-    nome_arquivo = nome_arquivo.strip()
-    caminho_pdf = gerar_relatorio_pdf(nome_arquivo)
     return FileResponse(
-        caminho_pdf,
+        path=caminho_pdf,
         media_type="application/pdf",
-        filename="relatorio_nfes.pdf",
+        filename=nome_pdf,
     )
 
 
+# --- Execução Principal ---
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

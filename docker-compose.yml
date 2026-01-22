@@ -1,0 +1,17 @@
+services:
+  fiscalia:
+    build: .
+    image: fiscalia-pro
+    container_name: fiscalia-container
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persistência do banco (se o SQLite ficar em /app/db ou similar)
+      - db_data:/app/db
+      # Persistência dos relatórios Excel/PDF (pasta que você já usa no código)
+      - ./relatorios:/app/relatorios
+
+volumes:
+  db_data:
