@@ -130,9 +130,9 @@ Durante o desenvolvimento do FiscalIA Pro, diversas decisões arquiteturais fora
 *   **Depuração do Problema de ICMS no Frontend:**
     *   Um desafio notado durante o desenvolvimento da interface foi a correta exibição dos valores de ICMS e total. Inicialmente, o frontend poderia apresentar imprecisões devido a problemas de arredondamento de ponto flutuante em JavaScript ou formatação inconsistente com os valores retornados pelo backend. A depuração envolveu a verificação das payloads da API, a aplicação de `toFixed(2)` e formatação de moeda no JavaScript para garantir que os valores fossem exibidos com duas casas decimais, conforme esperado para dados financeiros, alinhando a representação visual com a precisão dos dados do backend.
 
-## 📚 Diário de Desenvolvimento
+## 📚 Documentação Extra
 
-Para mais detalhes sobre o processo de desenvolvimento e os desafios enfrentados, consulte o [Diário de Desenvolvimento Docker](docs/diario_docker.md).
+- 📓 [Diário de Desenvolvimento e Docker](docs/diario_docker.md)
 
 ## 👨‍💻 Sobre o Desenvolvedor
 
