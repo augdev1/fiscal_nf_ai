@@ -100,7 +100,7 @@ Para uma execução mais isolada e consistente, utilize Docker e Docker Compose:
 
 A aplicação estará acessível em `http://localhost:8000`. A documentação interativa da API (Swagger UI) pode ser encontrada em `http://localhost:8000/docs`.
 
-## 🚶 Como Usar a Aplicação
+## ⚙️ Como Usar a Aplicação
 
 A interface web em `http://localhost:8000` oferece uma forma interativa de usar a API:
 
