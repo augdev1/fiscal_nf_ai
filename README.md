@@ -134,9 +134,19 @@ Durante o desenvolvimento do FiscalIA Pro, diversas decisões arquiteturais fora
 
 - 📓 [Diário de Desenvolvimento e Docker](docs/diario_docker.md)
 
+## 👨‍💻 Sobre o Desenvolvedor
+
+Olá! Meu nome é Augusto, e sou o desenvolvedor por trás do FiscalIA Pro. Este projeto representa um marco significativo na minha jornada de aprendizado em programação, que conta com **menos de um ano de estudo formal**.
+
 O FiscalIA Pro foi concebido e desenvolvido em um estilo de **pair programming intensivo com Inteligência Artificial**, explorando as capacidades de LLMs como um parceiro de codificação. Este projeto foi uma experiência de aprendizado autodidata, **sem o uso de vídeos tutoriais ou cursos pré-estruturados**, focando na resolução de problemas reais e na construção de um sistema funcional do zero.
 
 Meu principal objetivo com este projeto foi aprofundar meus conhecimentos em:
 *   **Arquitetura Backend:** Desenvolver uma API RESTful completa e bem estruturada.
 *   **Contenierização com Docker:** Dominar o uso de Docker e Docker Compose para deploy e gerenciamento de aplicações.
 *   **Boas Práticas de Código:** Aplicar princípios de código limpo, modularidade e testabilidade.
+
+Atualmente, estou buscando **vagas de estágio ou júnior** na área de desenvolvimento backend, onde possa aplicar e expandir minhas habilidades em um ambiente profissional. Sou apaixonado por resolver problemas complexos e estou sempre buscando aprender e evoluir.
+
+**Conecte-se comigo:**
+*   [Seu LinkedIn Profile URL]
+*   [Seu GitHub Profile URL]
