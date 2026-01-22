@@ -1,12 +1,12 @@
-FiscalIA Pro – Diário de Desenvolvimento com Docker
-Contexto geral
+# FiscalIA Pro – Diário de Desenvolvimento com Docker
+# Contexto geral
 Este documento registra a evolução do uso de Docker no projeto FiscalIA Pro, focado em processamento de NF-e, geração de relatórios Excel/PDF e análise com IA. A ideia é documentar os primeiros passos, erros encontrados, soluções adotadas e o fluxo de comunicação usado para depuração.
 
-Primeiros passos com Docker
+# Primeiros passos com Docker
 
-Objetivo inicial: containerizar a API FastAPI do FiscalIA Pro, expor a porta 8000 e conseguir testar tudo via Swagger e front-end HTML.
+# Objetivo inicial: containerizar a API FastAPI do FiscalIA Pro, expor a porta 8000 e conseguir testar tudo via Swagger e front-end HTML.
 
-Estrutura base:
+# Estrutura base:
 
 main.py com endpoints /processar-nfes, /download-relatorio, /gerar-relatorio-pdf, /resumo-ia e /health.
 
@@ -18,12 +18,12 @@ O foco inicial era apenas “funcionar dentro do container”, ainda sem uma est
 
 Problemas encontrados no front (ICMS “sumindo”)
 
-Sintoma
+# Sintoma
 O backend calculava e retornava total_geral e total_icms corretamente no JSON.
 
 No front, o card de Total ICMS parecia “zerado” ou simplesmente não aparecia.
 
-Exemplo de resposta da API:
+# Exemplo de resposta da API:
 
 json
 {
@@ -35,7 +35,7 @@ json
   "relatorio_excel": "relatorio_nfes_1769062035.xlsx",
   "detalhes_erros": []
 }
-Causa
+# Causa
 O HTML/JS (index.html) só exibia cards para:
 
 Sucessos (data.notas_processadas)
@@ -67,13 +67,13 @@ Resultado: o ICMS passou a aparecer normalmente no front, alinhado com o valor r
 
 Questões relacionadas a Docker e atualização de arquivos
 
-Problema: alterações no HTML não apareciam
+# Problema: alterações no HTML não apareciam
 Mesmo após editar o index.html, o front não refletia as mudanças.
 
-Motivo: o HTML estava empacotado dentro da imagem Docker; apenas atualizar o arquivo no host não alterava o conteúdo dentro do container.
+# Motivo: o HTML estava empacotado dentro da imagem Docker; apenas atualizar o arquivo no host não alterava o conteúdo dentro do container.
 ​
 
-Solução adotada
+# Solução adotada
 Parar o container antigo:
 
 docker compose down
@@ -86,16 +86,16 @@ Hard refresh no navegador (Ctrl+F5) para evitar cache.
 
 Após essa rotina, o front passou a servir a versão mais recente do index.html e das mudanças de JS.
 
-Organização de armazenamento em disco (relatórios + DB)
+# Organização de armazenamento em disco (relatórios + DB)
 
-Situação inicial
+# Situação inicial
 O projeto foi pensado para “apenas em disco”, sem banco em cloud no primeiro momento.
 
 Relatórios Excel/PDF eram gerados com nomes baseados em time.time(), por exemplo relatorio_nfes_1769061799.xlsx.
 
 As recriações de containers causavam confusão sobre onde estavam os arquivos e o DB visto pelo VS Code.
 
-Melhorias implementadas no main.py
+# Melhorias implementadas no main.py
 Pasta de relatórios e assets:
 
 python
@@ -130,7 +130,7 @@ def limpar_relatorios_antigos(dias_para_manter: int = 7) -> None:
                 arquivo.unlink()
         except OSError:
             pass
-Chamada da limpeza no startup da API:
+# Chamada da limpeza no startup da API:
 
 python
 @app.on_event("startup")
@@ -161,7 +161,7 @@ def _gera_relatorio_excel(notas: List[Dict], totais: Dict) -> str:
     return nome_arquivo
 Isso resolve o problema de “duplicatas” conceituais e define uma estratégia clara de limpeza automática com base na idade dos arquivos.
 
-Ajustes no docker-compose
+# Ajustes no docker-compose
 Configuração original (resumida):
 
 text
@@ -179,10 +179,10 @@ services:
 
 volumes:
   db_data:
-Problema: o volume db_data:/app montava a pasta inteira /app, podendo sobrescrever arquivos da aplicação dentro do container.
+# Problema: o volume db_data:/app montava a pasta inteira /app, podendo sobrescrever arquivos da aplicação dentro do container.
 ​
 
-Configuração ajustada para persistência mais limpa:
+# Configuração ajustada para persistência mais limpa:
 
 text
 services:
@@ -212,7 +212,7 @@ Estilo de perguntas e envio de erros
 
 Durante o processo, a forma de perguntar e de enviar informações ajudou bastante a depuração rápida. Alguns pontos fortes:
 
-Contexto incremental:
+# Contexto incremental:
 
 As mensagens vinham em sequência lógica: primeiro o sintoma (“sumiu o ICMS no front”), depois o JSON da API, depois o HTML completo, e só então detalhes de Docker.
 
@@ -230,7 +230,7 @@ Foram coladas saídas do docker compose up --build mostrando que a imagem rebuil
 
 Isso confirmou que o problema não era “esqueceu de rebuildar”, e sim cache de navegador ou HTML antigo.
 
-Validação contínua:
+# Validação contínua:
 
 Sempre que uma mudança era sugerida (ex.: adicionar o card de Total ICMS), você testava e respondia se o comportamento mudou.
 
