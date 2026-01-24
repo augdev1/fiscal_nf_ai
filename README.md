@@ -67,13 +67,12 @@ O projeto é construído sobre uma stack moderna e performática, com foco em es
 
 ---
 
-## ⚙️ Como Rodar Localmente (sem Docker)
+### ⚙️ Como Rodar Localmente (sem Docker)
 
 Siga estes passos para rodar o projeto localmente, sem Docker.
 
 1. **Clonar o repositório**
 
-```bash
 git clone https://github.com/seu-usuario/fiscal_nf_ai.git
 cd fiscal_nf_ai
 Criar e ativar um ambiente virtual
