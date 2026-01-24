@@ -203,7 +203,7 @@ Aplicação: http://localhost:8000
 ```
 ​
 
-Swagger: http://localhost:8000/docs
+   Swagger: http://localhost:8000/docs
 ​
 
 # 🚶 Como Usar a Aplicação
@@ -214,8 +214,7 @@ A interface web (http://localhost:8000) oferece uma forma interativa de usar a A
 Abra o navegador e vá para:
 ​
 
-```http://localhost:8000
-```
+   http://localhost:8000
 ​
 
 2. Carregar arquivos XML
