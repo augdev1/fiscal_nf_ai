@@ -210,59 +210,53 @@ Aplicação: http://localhost:8000
 A interface web (http://localhost:8000) oferece uma forma interativa de usar a API.
 ​
 
-1. Acessar a interface
+# 1. Acessar a interface
 Abra o navegador e vá para:
 ​
 
    http://localhost:8000
 ​
 
-2. Carregar arquivos XML
+# 2. Carregar arquivos XML
 Na área “Carregar Arquivos XML”, clique ou arraste/solte arquivos .xml de NF-e.
 ​
 
 Os arquivos selecionados aparecerão em uma lista na tela.
 ​
 
-3. Gerar relatório
+# 3. Gerar relatório
 Clique em “Gerar Relatório”.
 ​
 
 A aplicação processa os XMLs, armazena os dados e gera um relatório Excel consolidado.
 ​
 
-4. Baixar relatórios
+# 4. Baixar relatórios
 Baixar Excel: download direto do arquivo .xlsx.
 ​
 
 Gerar e Baixar PDF: conversão do Excel para PDF e download.
 ​
 
-5. Análise com IA
+# 5. Análise com IA
 Clique em “Análise com IA” para que o modelo de linguagem gere um resumo analítico dos dados (faturamento, principais emissores, ICMS etc.).
 ​
 
 # 👨‍💻 Sobre o Desenvolvedor
 Olá! Meu nome é Augusto, e sou o desenvolvedor por trás do FiscalIA Pro. Este projeto representa um marco significativo na minha jornada de aprendizado em programação, que conta com menos de um ano de estudo formal.
 ​
-
 O FiscalIA Pro foi concebido e desenvolvido em um estilo de pair programming intensivo com Inteligência Artificial, explorando as capacidades de LLMs como um parceiro de codificação.
 ​
 Este projeto foi uma experiência de aprendizado autodidata, sem o uso de vídeos tutoriais ou cursos pré-estruturados, focando na resolução de problemas reais e na construção de um sistema funcional do zero.
 ​
-
 Meu principal objetivo com este projeto foi aprofundar conhecimentos em:
 ​
-
 Arquitetura Backend: desenvolvimento de uma API RESTful completa e bem estruturada.
 ​
-
 Conteinerização com Docker: uso de Docker e Docker Compose para deploy e gerenciamento de aplicações.
 ​
-
 Boas práticas de código: aplicação de princípios de código limpo, modularidade e testabilidade.
 ​
-
 Atualmente, estou buscando vagas de estágio ou júnior na área de desenvolvimento backend, onde possa aplicar e expandir minhas habilidades em um ambiente profissional.
 ​
 Sou apaixonado por resolver problemas complexos e estou sempre buscando aprender e evoluir.
