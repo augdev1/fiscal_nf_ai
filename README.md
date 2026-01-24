@@ -1,10 +1,10 @@
-🧾 FiscalIA Pro: Análise Inteligente de NF-e com IA
+### 🧾 FiscalIA Pro: Análise Inteligente de NF-e com IA
 Este projeto apresenta uma API robusta desenvolvida em Python com FastAPI para automatizar o processamento e a análise de Notas Fiscais Eletrônicas (NF-e) a partir de arquivos XML.
 ​
 O objetivo é fornecer uma ferramenta eficiente para extração de dados fiscais, geração de relatórios detalhados e resumos inteligentes via inteligência artificial, focando na otimização de processos contábeis e fiscais.
 ​
 
-🚀 Visão Geral do Projeto
+### 🚀 Visão Geral do Projeto
 A gestão fiscal, especialmente o processamento de NF-e, pode ser um processo manual e demorado.
 ​
 O FiscalIA Pro surge como uma solução para este problema, permitindo que usuários façam upload de múltiplos arquivos XML de NF-e, que são então processados, seus dados armazenados em um banco de dados local e relatórios consolidados gerados em formatos acessíveis.
@@ -13,87 +13,87 @@ O FiscalIA Pro surge como uma solução para este problema, permitindo que usuá
 O diferencial do projeto está na integração com serviços de Inteligência Artificial para fornecer resumos e insights sobre os dados fiscais, transformando dados brutos em informações acionáveis.
 ​
 
-✨ Funcionalidades Principais
+### ✨ Funcionalidades Principais
 📂 Upload de múltiplos XMLs
 Capacidade de receber e processar um lote de arquivos XML de NF-e simultaneamente via interface web ou diretamente pela API.
 ​
 
-🧮 Processamento detalhado de NF-e
+### 🧮 Processamento detalhado de NF-e
 Extração e validação de informações cruciais das NF-e, incluindo dados do emitente, destinatário, valores totais da nota, itens e cálculos de impostos como o ICMS.
 ​
 
-💾 Armazenamento em banco de dados
+### 💾 Armazenamento em banco de dados
 Persistência dos dados das NF-e e das empresas emitentes em um banco de dados SQLite, garantindo rastreabilidade e capacidade de consulta futura.
 ​
 
-📊 Geração de relatórios em Excel
+### 📊 Geração de relatórios em Excel
 Consolidação dos dados processados em um relatório .xlsx organizado, facilitando análise e uso em outras ferramentas.
 ​
 
-📑 Geração de relatórios em PDF
+### 📑 Geração de relatórios em PDF
 Conversão dos relatórios Excel gerados para PDF, ideal para compartilhamento e arquivamento.
 ​
 
-🤖 Resumos analíticos com IA
+### 🤖 Resumos analíticos com IA
 Uso de modelos de linguagem (LLMs) via API Groq para gerar resumos concisos e análises inteligentes dos dados fiscais, destacando faturamento, principais emissores e insights sobre ICMS.
 ​
 
-🛠️ Stack Técnica
+### 🛠️ Stack Técnica
 O projeto é construído sobre uma stack moderna e performática, com foco em escalabilidade e facilidade de manutenção.
 ​
 
-🔙 Backend
-🐍 Python 3.11 – linguagem principal.
+### 🔙 Backend
+# 🐍 Python 3.11 – linguagem principal.
 ​
 
-⚙️ FastAPI – framework web de alta performance com tipagem e documentação automática (Swagger/OpenAPI).
+# ⚙️ FastAPI – framework web de alta performance com tipagem e documentação automática (Swagger/OpenAPI).
 ​
 
-🧮 Pandas – manipulação e análise de dados para relatórios e IA.
+# 🧮 Pandas – manipulação e análise de dados para relatórios e IA.
 ​
 
-🗄️ SQLite – banco de dados relacional leve para persistência local de dados das NF-e e empresas.
+# 🗄️ SQLite – banco de dados relacional leve para persistência local de dados das NF-e e empresas.
 ​
 
-🤖 Groq SDK – integração com LLMs para resumos inteligentes.
+# 🤖 Groq SDK – integração com LLMs para resumos inteligentes.
 ​
 
-📄 xmltodict – parsing eficiente de arquivos XML de NF-e.
+# 📄 xmltodict – parsing eficiente de arquivos XML de NF-e.
 ​
 
-🚀 uvicorn – servidor ASGI de alta performance para FastAPI.
+# 🚀 uvicorn – servidor ASGI de alta performance para FastAPI.
 ​
 
-📑 reportlab – geração programática de relatórios em PDF.
+# 📑 reportlab – geração programática de relatórios em PDF.
 ​
 
-📊 openpyxl – manipulação de arquivos Excel.
+# 📊 openpyxl – manipulação de arquivos Excel.
 ​
 
-🧩 Infraestrutura / DevOps
-🐳 Docker – conteinerização da aplicação para garantir ambientes consistentes em desenvolvimento e produção.
+### 🧩 Infraestrutura / DevOps
+# 🐳 Docker – conteinerização da aplicação para garantir ambientes consistentes em desenvolvimento e produção.
 ​
 
-🧱 Docker Compose – orquestração dos serviços Docker (aplicação, volumes etc.).
+# 🧱 Docker Compose – orquestração dos serviços Docker (aplicação, volumes etc.).
 ​
 
-🌐 Frontend (interface de exemplo)
-HTML, CSS, JavaScript – interface simples e funcional para:
+### 🌐 Frontend (interface de exemplo)
+# HTML, CSS, JavaScript – interface simples e funcional para:
 ​
 
-Upload de XMLs.
+# Upload de XMLs.
 ​
 
-Visualização de totais (incluindo ICMS).
+# Visualização de totais (incluindo ICMS).
 ​
 
-Download de relatórios.
+# Download de relatórios.
 ​
 
-Acesso à análise com IA.
+# Acesso à análise com IA.
 ​
 
-⚙️ Como Rodar Localmente (sem Docker)
+### ⚙️ Como Rodar Localmente (sem Docker)
 Siga estes passos para rodar o projeto localmente, sem Docker.
 ​
 
@@ -135,7 +135,7 @@ Aplicação: http://localhost:8000
 Documentação (Swagger UI): http://localhost:8000/docs
 ​
 
-🐳 Como Rodar com Docker e Docker Compose
+### 🐳 Como Rodar com Docker e Docker Compose
 Para uma execução isolada e reproduzível, utilize Docker e Docker Compose.
 ​
 
@@ -172,7 +172,7 @@ Aplicação: http://localhost:8000
 Swagger: http://localhost:8000/docs
 ​
 
-🚶 Como Usar a Aplicação
+### 🚶 Como Usar a Aplicação
 A interface web (http://localhost:8000) oferece uma forma interativa de usar a API.
 ​
 
@@ -208,7 +208,7 @@ Gerar e Baixar PDF: conversão do Excel para PDF e download.
 Clique em “Análise com IA” para que o modelo de linguagem gere um resumo analítico dos dados (faturamento, principais emissores, ICMS etc.).
 ​
 
-👨‍💻 Sobre o Desenvolvedor
+### 👨‍💻 Sobre o Desenvolvedor
 Olá! Meu nome é Augusto, e sou o desenvolvedor por trás do FiscalIA Pro. Este projeto representa um marco significativo na minha jornada de aprendizado em programação, que conta com menos de um ano de estudo formal.
 ​
 
