@@ -49,6 +49,7 @@ O foco inicial era apenas “funcionar dentro do container”, ainda sem uma est
   "relatorio_excel": "relatorio_nfes_1769062035.xlsx",
   "detalhes_erros": []
 }
+```
 Causa identificada
 No index.html (HTML/JS do front), a stats-grid exibia apenas:
 
