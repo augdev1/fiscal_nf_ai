@@ -59,62 +59,80 @@ O projeto é construído sobre uma stack moderna e performática, com foco em es
 
 
 
-## 🔙 Backend
+
+# 🔙 Backend :
 
 
 
 
 
-## 🐍 Python 3.11 – linguagem principal.
 
 
-## ⚙️ FastAPI – framework web de alta performance com tipagem e documentação automática (Swagger/OpenAPI).
+## 🐍 Python 3.11 – 
+Linguagem principal.
 
 
-## 🧮 Pandas – manipulação e análise de dados para relatórios e IA.
+
+## ⚙️ FastAPI – 
+Framework web de alta performance com tipagem e documentação automática (Swagger/OpenAPI).
 
 
-## 🗄️ SQLite – banco de dados relacional leve para persistência local de dados das NF-e e empresas.
+
+## 🧮 Pandas – 
+Manipulação e análise de dados para relatórios e IA.
 
 
-## 🤖 Groq SDK – integração com LLMs para resumos inteligentes.
+
+## 🗄️ SQLite – 
+Banco de dados relacional leve para persistência local de dados das NF-e e empresas.
 
 
-## 📄 xmltodict – parsing eficiente de arquivos XML de NF-e.
+
+## 🤖 Groq SDK – 
+Integração com LLMs para resumos inteligentes.
 
 
-## 🚀 uvicorn – servidor ASGI de alta performance para FastAPI.
+
+## 📄 xmltodict – 
+Parsing eficiente de arquivos XML de NF-e.
 
 
-## 📑 reportlab – geração programática de relatórios em PDF.
+
+## 🚀 uvicorn – 
+Servidor ASGI de alta performance para FastAPI.
 
 
-## 📊 openpyxl – manipulação de arquivos Excel.
+
+## 📑 reportlab – 
+Geração programática de relatórios em PDF.
 
 
-​
+
+## 📊 openpyxl – 
+Manipulação de arquivos Excel.
+
 
 # 🧩 Infraestrutura / DevOps
-## 🐳 Docker – conteinerização da aplicação para garantir ambientes consistentes em desenvolvimento e produção.
+## 🐳 Docker – 
+Conteinerização da aplicação para garantir ambientes consistentes em desenvolvimento e produção.
 ​
 
-## 🧱 Docker Compose – orquestração dos serviços Docker (aplicação, volumes etc.).
+## 🧱 Docker Compose – 
+Orquestração dos serviços Docker (aplicação, volumes etc.).
 ​
-
 # 🌐 Frontend (interface de exemplo)
 ## HTML, CSS, JavaScript – interface simples e funcional para:
 ​
+ Upload de XMLs.
 
-## Upload de XMLs.
 ​
+ Visualização de totais (incluindo ICMS).
 
-## Visualização de totais (incluindo ICMS).
 ​
+ Download de relatórios.
 
-## Download de relatórios.
 ​
-
-## Acesso à análise com IA.
+ Acesso à análise com IA.
 ​
 
 # ⚙️ Como Rodar Localmente (sem Docker)
@@ -244,20 +262,28 @@ Clique em “Análise com IA” para que o modelo de linguagem gere um resumo an
 
 # 👨‍💻 Sobre o Desenvolvedor
 Olá! Meu nome é Augusto, e sou o desenvolvedor por trás do FiscalIA Pro. Este projeto representa um marco significativo na minha jornada de aprendizado em programação, que conta com menos de um ano de estudo formal.
+
 ​
 O FiscalIA Pro foi concebido e desenvolvido em um estilo de pair programming intensivo com Inteligência Artificial, explorando as capacidades de LLMs como um parceiro de codificação.
+
 ​
 Este projeto foi uma experiência de aprendizado autodidata, sem o uso de vídeos tutoriais ou cursos pré-estruturados, focando na resolução de problemas reais e na construção de um sistema funcional do zero.
+
 ​
 Meu principal objetivo com este projeto foi aprofundar conhecimentos em:
+
 ​
 Arquitetura Backend: desenvolvimento de uma API RESTful completa e bem estruturada.
+
 ​
 Conteinerização com Docker: uso de Docker e Docker Compose para deploy e gerenciamento de aplicações.
+
 ​
 Boas práticas de código: aplicação de princípios de código limpo, modularidade e testabilidade.
+
 ​
 Atualmente, estou buscando vagas de estágio ou júnior na área de desenvolvimento backend, onde possa aplicar e expandir minhas habilidades em um ambiente profissional.
+
 ​
 Sou apaixonado por resolver problemas complexos e estou sempre buscando aprender e evoluir.
 ​
