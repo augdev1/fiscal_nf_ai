@@ -283,7 +283,11 @@ Boas práticas de código: aplicação de princípios de código limpo, modulari
 
 ​
 Atualmente, estou buscando vagas de estágio ou júnior na área de desenvolvimento backend, onde possa aplicar e expandir minhas habilidades em um ambiente profissional.
-Aqui está a documentação do projeto: [doc](./docs)
+## ➡️ Aqui está a documentação do projeto: [doc](./docs)
+
+## ➡️ Clique na imagem para ver o vídeo de demonstraçao do projeto em funcionamento/teste:
+
+
 [![Vídeo de demonstraçao do projeto em funcionamento/teste:](https://img.youtube.com/vi/Wa989uGPyH0/0.jpg)](https://youtu.be/Wa989uGPyH0)
 
 ​
