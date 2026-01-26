@@ -79,7 +79,7 @@ Fazer hard refresh no navegador (Ctrl+F5) para limpar cache.
 
 ✅ Resultado: o ICMS passou a aparecer normalmente no front, alinhado com o valor retornado pela API.
 
-3️⃣ Docker e atualização de arquivos estáticos
+## 3️⃣ Docker e atualização de arquivos estáticos
 Problema: alterações no HTML não apareciam
 Mesmo depois de editar o index.html, a interface continuava mostrando a versão antiga.
 
@@ -92,16 +92,16 @@ Passo a passo para refletir mudanças no front:
 
 bash
 # 1. Parar o container antigo
-docker compose down
+```docker compose down```
 
 # 2. Rebuildar a imagem e subir novamente
-docker compose up --build -d
+```docker compose up --build -d```
 
 # 3. No navegador
 # Hard refresh: Ctrl + F5
 Após seguir essa rotina, o front passou a servir a versão mais recente do index.html e do JavaScript.
 
-4️⃣ Organização de armazenamento em disco (relatórios + DB)
+## 4️⃣ Organização de armazenamento em disco (relatórios + DB)
 Situação inicial
 O projeto foi pensado para funcionar apenas em disco (MVP), sem banco em cloud.
 
@@ -181,9 +181,9 @@ def _gera_relatorio_excel(notas: List[Dict], totais: Dict) -> str:
     return nome_arquivo
 🔎 Isso resolve o problema de possíveis “duplicatas” conceituais e define uma estratégia clara de limpeza automática baseada na idade dos arquivos.
 
-5️⃣ Ajustes no docker-compose e persistência
-Configuração original (resumida)
-text
+## 5️⃣ Ajustes no docker-compose e persistência
+Configuração original (resumida):
+
 services:
   fiscalia:
     build: .
@@ -203,7 +203,7 @@ O volume db_data:/app montava a pasta inteira /app, podendo sobrescrever arquivo
 
 Configuração ajustada para persistência mais limpa
 text
-services:
+```services:
   fiscalia:
     build: .
     image: fiscalia-pro
@@ -217,9 +217,10 @@ services:
       - db_data:/app/db
       # Relatórios Excel/PDF persistentes no host
       - ./relatorios:/app/relatorios
-
-volumes:
+```
+```volumes:
   db_data:
+```
 Com isso:
 
 O banco fica em um volume nomeado (db_data), persistindo entre recriações de container.
@@ -232,7 +233,7 @@ Fáceis de limpar manualmente.
 
 Simples de inspecionar diretamente pelo sistema de arquivos.
 
-6️⃣ Estilo de perguntas e envio de erros
+## 6️⃣ Estilo de perguntas e envio de erros
 Durante o processo, a forma de comunicação ajudou bastante na depuração rápida. Alguns pontos fortes:
 
 Contexto incremental
@@ -257,7 +258,8 @@ Uso de logs e saídas de terminal
 Foram coladas saídas do:
 
 bash
-docker compose up --build
+```docker compose up --build```
+
 mostrando:
 
 Build da imagem.
@@ -273,7 +275,7 @@ Isso criou um ciclo rápido de feedback, parecido com uma sessão de pair progra
 
 🔚 Em resumo, o padrão de perguntas foi objetivo, incremental e sempre com código/log anexo, o que é ideal para suporte técnico e debugging em projetos com FastAPI + Docker + frontend estático.
 
-7️⃣ Situação atual antes do deploy
+## 7️⃣ Situação atual antes do deploy
 No momento deste registro:
 
 Endpoints funcionando (validados pelo front)
@@ -301,7 +303,9 @@ Persistir banco de dados e relatórios em disco.
 
 Atualizar imagem e containers via:
 
-bash
+
+```
 docker compose down
 docker compose up --build -d
+```
 A partir daqui, o próximo passo natural é configurar e executar o deploy em um ambiente de cloud (ex.: Railway, Render ou VPS), usando a imagem Docker já estável.
