@@ -260,9 +260,7 @@ Gerar e Baixar PDF: conversão do Excel para PDF e download.
 Clique em “Análise com IA” para que o modelo de linguagem gere um resumo analítico dos dados (faturamento, principais emissores, ICMS etc.).
 ​
 
-# 👨‍💻 Sobre o Desenvolvedor
-Olá! Meu nome é Augusto, e sou o desenvolvedor por trás do FiscalIA Pro. Este projeto representa um marco significativo na minha jornada de aprendizado em programação, que conta com menos de um ano de estudo formal.
-
+# 👨‍💻 Sobre o Projeto
 ​
 O FiscalIA Pro foi concebido e desenvolvido em um estilo de pair programming intensivo com Inteligência Artificial, explorando as capacidades de LLMs como um parceiro de codificação.
 
@@ -280,9 +278,7 @@ Conteinerização com Docker: uso de Docker e Docker Compose para deploy e geren
 
 ​
 Boas práticas de código: aplicação de princípios de código limpo, modularidade e testabilidade.
-
 ​
-Atualmente, estou buscando vagas de estágio ou júnior na área de desenvolvimento backend, onde possa aplicar e expandir minhas habilidades em um ambiente profissional.
 ## ➡️ Aqui está a documentação do projeto: [doc](./docs)
 
 ## ➡️ Clique na imagem para ver o vídeo de demonstração do projeto em funcionamento/teste:
